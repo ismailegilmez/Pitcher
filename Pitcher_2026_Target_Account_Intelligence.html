@@ -12175,8 +12175,8 @@ function closeTalkModal(e) {
 }
 
 // Charts
-const verticalData = {"2026 Pharma ICP": 142, "2026 MedTech ICP": 135, "2026 Manufacturing ICP": 200, "European HLS (Ismail)": 239};
-const countryData = {"United States": 279, "United Kingdom": 78, "Germany": 55, "France": 31, "Switzerland": 29, "Japan": 26, "Sweden": 22, "Ireland": 19, "Denmark": 18, "Italy": 14, "India": 12, "Spain": 12, "Finland": 10, "Netherlands": 10, "Poland": 7};
+const verticalData = {"2026 Pharma ICP": 159, "2026 MedTech ICP": 135, "2026 Manufacturing ICP": 200, "European HLS (Ismail)": 239, "European FinServ ICP": 48};
+const countryData = {"United States": 279, "United Kingdom": 89, "Germany": 64, "France": 43, "Switzerland": 38, "Japan": 26, "Sweden": 23, "Italy": 21, "Denmark": 20, "Ireland": 19, "Netherlands": 17, "Spain": 15, "India": 12, "Unknown": 10, "Finland": 10};
 
 // Vertical Doughnut
 new Chart(document.getElementById('verticalChart'), {
@@ -12185,7 +12185,7 @@ new Chart(document.getElementById('verticalChart'), {
     labels: Object.keys(verticalData).map(k => k.replace('2026 ','').replace(' ICP','')),
     datasets: [{
       data: Object.values(verticalData),
-      backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#3b82f6'],
+      backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#3b82f6', '#fbbf24'],
       borderColor: '#1e293b',
       borderWidth: 2
     }]
