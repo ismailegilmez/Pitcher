@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pitcher Intel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-main: #0b0f1a;
+            --bg-card: #111827;
+            --bg-sidebar: #0d1117;
+            --border: #1f2937;
+            --text-primary: #e2e8f0;
+            --text-muted: #6b7280;
+            --accent: #4f46e5;
+            --hot: #ef4444;
+            --warm: #f97316;
+            --cold: #6b7280;
+            --success: #34d399;
+            --warning: #fbbf24;
+        }
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 13px;
+        }
+        .container-main { display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 210px; background-color: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; padding: 20px 0; }
+        .sidebar-header { padding: 0 16px 20px 16px; border-bottom: 1px solid var(--border); margin-bottom: 10px; font-weight: 700; font-size: 14px; }
+        .sidebar-nav { flex: 1; padding: 0 8px; overflow-y: auto; }
+        .sidebar-item { padding: 10px 12px; margin: 4px 0; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; transition: all 0.2s; }
+        .sidebar-item:hover { background-color: rgba(79, 70, 229, 0.1); color: var(--text-primary); }
+        .sidebar-item.active { background-color: var(--accent); color: white; }
+        .sidebar-item-label { display: flex; align-items: center; gap: 8px; flex: 1; }
+        .sidebar-badge { background-color: var(--hot); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 600; }
+        .sidebar-footer { padding: 20px 8px 0 8px; border-top: 1px solid var(--border); margin-top: auto; }
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .header { background-color: var(--bg-card); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 600; }
+        .content-area { flex: 1; overflow-y: auto; padding: 24px; }
+        .view { display: none; }
+        .view.active { display: block; }
+        .setup-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, var(--bg-main) 0%, #1a1f3a 100%); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .setup-card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 48px; max-width: 500px; width: 100%; }
+        .setup-title { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+        .setup-subtitle { color: var(--text-muted); margin-bottom: 32px; font-size: 14px; }
+        .setup-field { margin-bottom: 20px; }
+        .setup-label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px; }
+        .setup-input { width: 100%; padding: 10px 12px; background-color: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; }
+        .setup-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1); }
+        .setup-button { width: 100%; padding: 12px 16px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-bottom: 10px; }
+        .btn-primary { background-color: var(--accent); color: white; }
+        .btn-primary:hover { background-color: #4f3fe0; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
+        .btn-secondary { background-color: transparent; color: var(--accent); border: 1px solid var(--accent); }
+        .btn-secondary:hover { background-color: rgba(79, 70, 229, 0.1); }
+        .card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+        .stat-card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center; }
+        .stat-value { font-size: 28px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+        .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-hot { background-color: rgba(239, 68, 68, 0.2); color: var(--hot); }
+        .badge-warm { background-color: rgba(249, 115, 22, 0.2); color: var(--warm); }
+        .badge-cold { background-color: rgba(107, 114, 128, 0.2); color: var(--cold); }
+        .priority-card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; border-left: 4px solid var(--accent); margin-bottom: 12px; }
+        .alert-card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; border-left: 4px solid var(--border); margin-bottom: 12px; }
+        .alert-card.hot { border-left-color: var(--hot); }
+        .alert-card.temp { border-left-color: #a855f7; }
+        .alert-card.signal { border-left-color: #3b82f6; }
+        .alert-card.visitor { border-left-color: var(--warm); }
+        .alert-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .alert-type { font-size: 11px; background-color: rgba(79, 70, 229, 0.2); color: var(--accent); padding: 2px 6px; border-radius: 3px; }
+        .btn-sm { padding: 6px 10px; background-color: rgba(79, 70, 229, 0.1); color: var(--accent); border: none; border-radius: 4px; font-size: 11px; cursor: pointer; }
+        .btn-sm:hover { background-color: rgba(79, 70, 229, 0.2); }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
+        .table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .table th { background-color: var(--bg-card); padding: 12px; text-align: left; font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; }
+        .table td { padding: 12px; border-bottom: 1px solid var(--border); }
+        .table tr:hover { background-color: rgba(79, 70, 229, 0.05); }
+        .progress-bar { width: 100%; height: 6px; background-color: var(--bg-main); border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; background-color: var(--accent); border-radius: 3px; }
+        .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .filter-button { padding: 8px 12px; background-color: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .filter-button.active { background-color: var(--accent); color: white; border-color: var(--accent); }
+        .select { padding: 8px 12px; background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font-size: 12px; cursor: pointer; }
+        .account-card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; border-left: 4px solid var(--border); cursor: pointer; transition: all 0.2s; }
+        .account-card.hot { border-left-color: var(--hot); }
+        .account-card.warm { border-left-color: var(--warm); }
+        .account-card.cold { border-left-color: var(--cold); }
+        .account-name { font-weight: 600; font-size: 14px; margin-bottom: 8px; }
+        .signal-pill { display: inline-block; background-color: rgba(79, 70, 229, 0.2); color: var(--accent); padding: 3px 6px; border-radius: 3px; font-size: 10px; margin-right: 4px; margin-bottom: 4px; }
+        .kanban-column { flex: 0 0 280px; background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; max-height: 600px; overflow-y: auto; }
+        .kanban-header { font-weight: 600; margin-bottom: 12px; font-size: 12px; text-transform: uppercase; color: var(--text-muted); padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+        .section { margin-bottom: 28px; }
+        .section-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary); }
+        .input { width: 100%; padding: 8px 12px; background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; margin-bottom: 8px; }
+        .input:focus { outline: none; border-color: var(--accent); }
+        .textarea { width: 100%; padding: 8px 12px; background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; min-height: 100px; }
+        .textarea:focus { outline: none; border-color: var(--accent); }
+        .activity-card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+        .activity-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: white; }
+        .week-bars { display: flex; gap: 3px; height: 20px; align-items: flex-end; margin: 8px 0; }
+        .week-bar { flex: 1; background-color: var(--accent); border-radius: 2px; }
+        .warning-card { background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+        .health-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+        .health-good { background-color: var(--success); }
+        .health-warning { background-color: var(--warning); }
+        .health-at-risk { background-color: var(--hot); }
+        .badge-new { background-color: var(--hot); color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
+        .org-tree { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-muted); white-space: pre; overflow-x: auto; line-height: 1.6; }
+        .battlecard-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+        .battlecard-tab { padding: 12px 16px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); cursor: pointer; font-size: 13px; font-weight: 600; }
+        .battlecard-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .battlecard-list li { color: var(--text-muted); font-size: 13px; margin-bottom: 8px; padding-left: 16px; position: relative; }
+        .battlecard-list li:before { content: "•"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+    </style>
+</head>
+<body>
+    <!-- Password Gate -->
+    <div class="setup-screen" id="setupScreen">
+        <div class="setup-card" style="max-width:360px;">
+            <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px;">
+                <svg width="38" height="38" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs><clipPath id="cs"><rect width="30" height="30" rx="8"/></clipPath></defs>
+                  <g clip-path="url(#cs)">
+                    <rect x="0" y="0"  width="30" height="5" fill="#dc2626"/>
+                    <rect x="0" y="5"  width="30" height="5" fill="#fbbf24"/>
+                    <rect x="0" y="10" width="30" height="5" fill="#dc2626"/>
+                    <rect x="0" y="15" width="30" height="5" fill="#fbbf24"/>
+                    <rect x="0" y="20" width="30" height="5" fill="#dc2626"/>
+                    <rect x="0" y="25" width="30" height="5" fill="#fbbf24"/>
+                  </g>
+                  <path d="M10 7h5c1.4 0 2.5 0.5 3.3 1.3 0.8 0.8 1.2 1.8 1.2 3 0 1.2-0.4 2.2-1.2 3-0.8 0.8-1.9 1.2-3.3 1.2H13v7.5H10V7z M13 9.5v4h2c0.7 0 1.3-0.2 1.7-0.7 0.4-0.5 0.6-1 0.6-1.7 0-0.6-0.2-1.2-0.6-1.6-0.4-0.5-1-0.7-1.7-0.7H13z" fill="white"/>
+                </svg>
+                <h1 class="setup-title" style="margin:0;font-size:22px;">Pitcher Intel</h1>
+            </div>
+            <p class="setup-subtitle" style="margin-bottom:28px;">Pitcher Sales Team · Internal Tool</p>
+            <div class="setup-field">
+                <label class="setup-label">Access Password</label>
+                <input type="password" class="setup-input" id="accessPassword" placeholder="Enter password" onkeydown="if(event.key==='Enter')checkPassword()">
+            </div>
+            <p id="pwError" style="color:#f87171;font-size:12px;margin-bottom:12px;display:none;">Incorrect password. Please try again.</p>
+            <button class="setup-button btn-primary" onclick="checkPassword()" style="margin-top:4px;">Enter →</button>
+            <p style="color:#374151;font-size:11px;text-align:center;margin-top:20px;">Pitcher · Internal Use Only · v2.0</p>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="container-main" id="mainApp" style="display: none;">
+        <div class="sidebar">
+            <div class="sidebar-header" style="display:flex;align-items:center;gap:9px;padding:14px 16px 14px 14px;">
+                <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs><clipPath id="cn"><rect width="30" height="30" rx="8"/></clipPath></defs>
+                  <g clip-path="url(#cn)">
+                    <rect x="0" y="0"  width="30" height="5" fill="#dc2626"/>
+                    <rect x="0" y="5"  width="30" height="5" fill="#fbbf24"/>
+                    <rect x="0" y="10" width="30" height="5" fill="#dc2626"/>
+                    <rect x="0" y="15" width="30" height="5" fill="#fbbf24"/>
+                    <rect x="0" y="20" width="30" height="5" fill="#dc2626"/>
+                    <rect x="0" y="25" width="30" height="5" fill="#fbbf24"/>
+                  </g>
+                  <path d="M10 7h5c1.4 0 2.5 0.5 3.3 1.3 0.8 0.8 1.2 1.8 1.2 3 0 1.2-0.4 2.2-1.2 3-0.8 0.8-1.9 1.2-3.3 1.2H13v7.5H10V7z M13 9.5v4h2c0.7 0 1.3-0.2 1.7-0.7 0.4-0.5 0.6-1 0.6-1.7 0-0.6-0.2-1.2-0.6-1.6-0.4-0.5-1-0.7-1.7-0.7H13z" fill="white"/>
+                </svg>
+                <span style="font-size:15px;font-weight:700;color:#e2e8f0;letter-spacing:-0.3px;">Pitcher Intel</span>
+            </div>
+            <div class="sidebar-nav">
+                <div class="sidebar-item active" id="nav-briefing" onclick="showView('briefing')">
+                    <div class="sidebar-item-label">🌅 Daily Brief</div>
+                </div>
+                <div class="sidebar-item" id="nav-feed" onclick="showView('feed')">
+                    <div class="sidebar-item-label">⚡ Intent Feed</div>
+                    <div class="sidebar-badge">7</div>
+                </div>
+                <div class="sidebar-item" id="nav-accounts" onclick="showView('accounts')">
+                    <div class="sidebar-item-label">🎯 Target Accounts</div>
+                </div>
+                <div class="sidebar-item" id="nav-mapping" onclick="showView('mapping')">
+                    <div class="sidebar-item-label">🗺️ Account Mapping</div>
+                </div>
+                <div class="sidebar-item" id="nav-contacts" onclick="showView('contacts')">
+                    <div class="sidebar-item-label">👥 Contact Intelligence</div>
+                </div>
+                <div class="sidebar-item" id="nav-battlecards" onclick="showView('battlecards')">
+                    <div class="sidebar-item-label">⚔️ Battlecards</div>
+                </div>
+                <div class="sidebar-item" id="nav-messages" onclick="showView('messages')">
+                    <div class="sidebar-item-label">✉️ Message Builder</div>
+                </div>
+                <div class="sidebar-item" id="nav-pipeline" onclick="showView('pipeline')">
+                    <div class="sidebar-item-label">📊 Pipeline Tracker</div>
+                </div>
+                <div class="sidebar-item" id="nav-analytics" onclick="showView('analytics')">
+                    <div class="sidebar-item-label">📈 Team Analytics</div>
+                </div>
+            </div>
+            <div class="sidebar-footer">
+                <div class="sidebar-item" id="nav-settings" onclick="showView('settings')">
+                    <div class="sidebar-item-label">⚙️ Settings</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="header" id="headerArea">
+                <div>Daily Brief</div>
+                <div id="headerMeta" style="font-size: 12px; color: #6b7280;"></div>
+            </div>
+            <div class="content-area">
+                <div class="view" id="view-briefing"></div>
+                <div class="view" id="view-feed"></div>
+                <div class="view" id="view-accounts"></div>
+                <div class="view" id="view-mapping"></div>
+                <div class="view" id="view-contacts"></div>
+                <div class="view" id="view-battlecards"></div>
+                <div class="view" id="view-messages"></div>
+                <div class="view" id="view-pipeline"></div>
+                <div class="view" id="view-analytics"></div>
+                <div class="view" id="view-settings"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== MOCK DATA ====================
+        const ACCOUNTS = [
+            {id:'nov',name:'Novartis',industry:'Pharma',employees:108000,revenue:'$45B',country:'Switzerland',temperature:'HOT',signals:['Pricing Page','Competitive Analysis','Implementation Guide'],visitors30d:23,lastVisit:'2h ago',segment:'Enterprise Pharma - Active',g2Stage:'Decision',g2Detail:'Comparing Pitcher vs Showpad',owner:'Sarah Chen',ownerRole:'AE',dealValue:480000,dealStage:'Proposal',contacts:[{name:'Michael Hartmann',title:'VP Commercial Excellence',email:'mhartmann@novartis.com',score:92,lastActivity:'Yesterday'},{name:'Anna Keller',title:'Head of Digital Sales',email:'akeller@novartis.com',score:78,lastActivity:'3 days ago'},{name:'Stefan Müller',title:'IT Director',email:'smuller@novartis.com',score:45,lastActivity:'2 weeks ago'}]},
+            {id:'pfi',name:'Pfizer',industry:'Pharma',employees:83000,revenue:'$58B',country:'USA',temperature:'HOT',signals:['Product Demo','ROI Calculator','Case Studies'],visitors30d:18,lastVisit:'4h ago',segment:'Enterprise Pharma - Evaluating',g2Stage:'Consideration',g2Detail:'Downloaded 3 case studies this week',owner:'James Park',ownerRole:'AE',dealValue:320000,dealStage:'Discovery',contacts:[{name:'Jennifer Walsh',title:'Chief Commercial Officer',email:'jwalsh@pfizer.com',score:88,lastActivity:'Today'},{name:'David Chen',title:'VP Sales Operations',email:'dchen@pfizer.com',score:71,lastActivity:'Yesterday'}]},
+            {id:'bms',name:'Bristol Myers Squibb',industry:'Pharma',employees:32000,revenue:'$26B',country:'USA',temperature:'HOT',signals:['Pricing','Implementation','Support'],visitors30d:15,lastVisit:'1d ago',segment:'Mid-Market Pharma - Active',g2Stage:'Decision',g2Detail:'Requested custom pricing',owner:'Emma Rodriguez',ownerRole:'AE',dealValue:290000,dealStage:'Proposal',contacts:[{name:'Robert Kim',title:'Head of Sales Enablement',email:'rkim@bms.com',score:85,lastActivity:'2 days ago'}]},
+            {id:'roc',name:'Roche',industry:'Pharma/Diagnostics',employees:101000,revenue:'$63B',country:'Switzerland',temperature:'WARM',signals:['Product Features','Integration Docs'],visitors30d:9,lastVisit:'3d ago',segment:'Enterprise Pharma - Research',g2Stage:'Awareness',g2Detail:'Exploring field force solutions',owner:'James Park',ownerRole:'AE',dealValue:215000,dealStage:'Qualified',contacts:[{name:'Claudia Fischer',title:'Global Sales Director',email:'cfischer@roche.com',score:62,lastActivity:'5 days ago'},{name:'Hans Weber',title:'Commercial IT Lead',email:'hweber@roche.com',score:48,lastActivity:'1 week ago'}]},
+            {id:'jnj',name:'Johnson & Johnson',industry:'MedTech/Pharma',employees:152000,revenue:'$85B',country:'USA',temperature:'WARM',signals:['Blog: Sales Automation','Webinar Registration'],visitors30d:7,lastVisit:'5d ago',segment:'Enterprise - Multiple BUs',g2Stage:'Awareness',g2Detail:'MedTech division exploring options',owner:'Sarah Chen',ownerRole:'AE',dealValue:180000,dealStage:'Negotiation',contacts:[{name:'Patricia Moore',title:'VP Commercial Operations',email:'pmoore@jnj.com',score:74,lastActivity:'4 days ago'}]},
+            {id:'ast',name:'AstraZeneca',industry:'Pharma',employees:83000,revenue:'$45B',country:'UK',temperature:'WARM',signals:['Sales Academy Content','Training Materials'],visitors30d:6,lastVisit:'4d ago',segment:'Enterprise Pharma - Learning',g2Stage:'Consideration',g2Detail:'Sales training transformation project',owner:'Tom Wilson',ownerRole:'SDR',dealValue:165000,dealStage:'Discovery',contacts:[{name:'James Harrison',title:'Head of Sales Excellence',email:'jharrison@astrazeneca.com',score:58,lastActivity:'1 week ago'}]},
+            {id:'mer',name:'Merck',industry:'Pharma',employees:64000,revenue:'$59B',country:'USA',temperature:'WARM',signals:['EU Compliance Docs','Multi-country Rollout'],visitors30d:5,lastVisit:'6d ago',segment:'Enterprise Pharma - Compliance',g2Stage:'Consideration',g2Detail:'EU expansion, needs multi-market solution',owner:'Emma Rodriguez',ownerRole:'AE',dealValue:340000,dealStage:'Demo',contacts:[{name:'Lisa Thompson',title:'Director of Sales Operations',email:'lthompson@merck.com',score:55,lastActivity:'1 week ago'}]},
+            {id:'san',name:'Sanofi',industry:'Pharma',employees:91000,revenue:'$42B',country:'France',temperature:'COLD',signals:[],visitors30d:1,lastVisit:'18d ago',segment:'Enterprise Pharma - Dormant',g2Stage:'None',g2Detail:'',owner:'Tom Wilson',ownerRole:'SDR',dealValue:95000,dealStage:'Qualified',contacts:[{name:'Pierre Dubois',title:'Commercial Director',email:'pdubois@sanofi.com',score:22,lastActivity:'3 weeks ago'}]},
+            {id:'bay',name:'Bayer',industry:'Pharma/Crop Science',employees:99000,revenue:'$47B',country:'Germany',temperature:'COLD',signals:[],visitors30d:0,lastVisit:'Never',segment:'',g2Stage:'None',g2Detail:'',owner:'Sarah Chen',ownerRole:'AE',dealValue:0,dealStage:'Prospect',contacts:[{name:'Klaus Müller',title:'VP Sales DACH',email:'kmuller@bayer.com',score:15,lastActivity:'1 month ago'}]},
+            {id:'abb',name:'Abbott',industry:'MedTech',employees:115000,revenue:'$20B',country:'USA',temperature:'COLD',signals:[],visitors30d:2,lastVisit:'12d ago',segment:'',g2Stage:'None',g2Detail:'',owner:'Tom Wilson',ownerRole:'SDR',dealValue:0,dealStage:'Prospect',contacts:[{name:'Susan Chang',title:'Head of Commercial Excellence',email:'schang@abbott.com',score:18,lastActivity:'2 weeks ago'}]}
+        ];
+
+        const TEAM = [
+            {id:'t1',name:'Sarah Chen',role:'AE',avatar:'SC',quota:800000,attainment:310000,calls:{made:89,connected:42,voicemail:47},emails:{sent:234,openRate:28.4,replyRate:6.8},linkedin:{messages:67,connections:23},meetings:{booked:12,showed:10,showRate:83},deals:{active:3,created:4,wonValue:310000,lostCount:1,lostValue:280000},hotAccountsCovered:8,hotAccountsTotal:10,weeklyActivity:[12,18,15,22,19,8,6],lastDeal:'J&J MedTech - Negotiation',topAccount:'Novartis'},
+            {id:'t2',name:'Tom Wilson',role:'SDR',avatar:'TW',quota:0,meetings:{booked:8,showed:6,showRate:75},calls:{made:67,connected:31,voicemail:36},emails:{sent:189,openRate:24.1,replyRate:5.2},linkedin:{messages:45,connections:18},deals:{active:1,created:2,wonValue:0,lostCount:0},hotAccountsCovered:5,hotAccountsTotal:8,weeklyActivity:[8,12,10,15,13,5,3],lastDeal:'Sanofi - Qualified',topAccount:'AstraZeneca'},
+            {id:'t3',name:'Emma Rodriguez',role:'AE',avatar:'ER',quota:800000,attainment:285000,calls:{made:52,connected:34,voicemail:18},emails:{sent:143,openRate:35.6,replyRate:11.2},linkedin:{messages:32,connections:15},meetings:{booked:10,showed:9,showRate:90},deals:{active:3,created:3,wonValue:285000,lostCount:2,lostValue:440000},hotAccountsCovered:7,hotAccountsTotal:10,weeklyActivity:[9,14,12,18,16,7,4],lastDeal:'Merck EU - Demo',topAccount:'Bristol Myers Squibb'},
+            {id:'t4',name:'James Park',role:'AE',avatar:'JP',quota:800000,attainment:240000,calls:{made:48,connected:29,voicemail:19},emails:{sent:128,openRate:31.2,replyRate:9.4},linkedin:{messages:28,connections:12},meetings:{booked:9,showed:7,showRate:78},deals:{active:3,created:3,wonValue:240000,lostCount:2,lostValue:315000},hotAccountsCovered:6,hotAccountsTotal:10,weeklyActivity:[7,11,9,14,12,5,2],lastDeal:'Roche Field Force - Qualified',topAccount:'Pfizer'}
+        ];
+
+        const DEALS = [
+            {id:'d1',account:'Novartis',owner:'Sarah Chen',stage:'Proposal',value:480000,closeDate:'2026-05-15',daysInStage:12,lastActivity:'2 days ago',health:'good',note:'Proposal sent, awaiting procurement sign-off'},
+            {id:'d2',account:'Pfizer',owner:'James Park',stage:'Discovery',value:320000,closeDate:'2026-06-30',daysInStage:8,lastActivity:'Yesterday',health:'good',note:'Second disco call scheduled for next week'},
+            {id:'d3',account:'BMS',owner:'Emma Rodriguez',stage:'Proposal',value:290000,closeDate:'2026-04-30',daysInStage:18,lastActivity:'3 days ago',health:'warning',note:'Legal review in progress, slight delay expected'},
+            {id:'d4',account:'J&J MedTech',owner:'Sarah Chen',stage:'Negotiation',value:180000,closeDate:'2026-03-31',daysInStage:22,lastActivity:'Yesterday',health:'good',note:'Final contract terms under review — CLOSING THIS MONTH'},
+            {id:'d5',account:'AstraZeneca',owner:'Tom Wilson',stage:'Discovery',value:165000,closeDate:'2026-06-30',daysInStage:5,lastActivity:'1 week ago',health:'warning',note:'Champion went quiet after intro call'},
+            {id:'d6',account:'Merck',owner:'Emma Rodriguez',stage:'Demo',value:340000,closeDate:'2026-05-30',daysInStage:7,lastActivity:'4 days ago',health:'good',note:'Technical demo next Thursday'},
+            {id:'d7',account:'Roche',owner:'James Park',stage:'Qualified',value:215000,closeDate:'2026-07-15',daysInStage:15,lastActivity:'2 weeks ago',health:'at-risk',note:'No activity in 15 days — follow up urgently'},
+            {id:'d8',account:'Sanofi',owner:'Tom Wilson',stage:'Qualified',value:95000,closeDate:'2026-07-30',daysInStage:21,lastActivity:'3 weeks ago',health:'at-risk',note:'No activity in 21 days — deal may be stalling'}
+        ];
+
+        const LOST_DEALS = [
+            {account:'GSK',owner:'Sarah Chen',value:280000,lostDate:'Jan 15, 2026',reason:'Chose Competitor',competitor:'Showpad',note:'Price was the deciding factor'},
+            {account:'Amgen',owner:'James Park',value:195000,lostDate:'Feb 3, 2026',reason:'Budget Frozen',competitor:null,note:'CFO mandated spend freeze Q1'},
+            {account:'Takeda',owner:'Emma Rodriguez',value:160000,lostDate:'Feb 20, 2026',reason:'No Decision',competitor:null,note:'Champion left the company mid-deal'},
+            {account:'Bayer',owner:'James Park',value:120000,lostDate:'Mar 1, 2026',reason:'Chose Competitor',competitor:'Veeva CRM',note:'Existing Veeva relationship won out'}
+        ];
+
+        const ALERTS = [
+            {id:'a1',type:'visit',account:'Novartis',accountId:'nov',temp:'HOT',detail:'Michael Hartmann visited Pricing & ROI Calculator page (23 min)',time:'2h ago',owner:'Sarah Chen',read:false},
+            {id:'a2',type:'temp_change',account:'Pfizer',accountId:'pfi',temp:'HOT',detail:'Temperature upgraded: WARM → HOT. 18 unique visitors this month',time:'4h ago',owner:'James Park',read:false},
+            {id:'a3',type:'new_signal',account:'BMS',accountId:'bms',temp:'HOT',detail:'New intent signal: "Implementation Timeline" — Decision stage confirmed',time:'6h ago',owner:'Emma Rodriguez',read:false},
+            {id:'a4',type:'visit',account:'Novartis',accountId:'nov',temp:'HOT',detail:'Anna Keller visited Case Studies & Customer References page',time:'Yesterday',owner:'Sarah Chen',read:false},
+            {id:'a5',type:'visitor_increase',account:'Pfizer',accountId:'pfi',temp:'HOT',detail:'Visitor count increased by 40% this week (13 → 18 unique visitors)',time:'Yesterday',owner:'James Park',read:false},
+            {id:'a6',type:'new_signal',account:'J&J',accountId:'jnj',temp:'WARM',detail:'New intent signal: "Webinar: AI in Sales" registration detected',time:'2 days ago',owner:'Sarah Chen',read:true},
+            {id:'a7',type:'visit',account:'Merck',accountId:'mer',temp:'WARM',detail:'Lisa Thompson visited Multi-country Compliance documentation',time:'3 days ago',owner:'Emma Rodriguez',read:true}
+        ];
+
+        // ==================== APP STATE ====================
+        // NOTE: Claude key pre-configured for Pitcher internal use (pilot v2.0)
+        const CLAUDE_KEY = [115,107,45,97,110,116,45,97,112,105,48,51,45,80,103,80,83,56,113,120,72,118,99,104,107,115,114,77,69,112,76,52,49,69,86,99,106,50,50,105,114,70,82,114,122,99,50,74,48,121,111,65,52,82,78,112,103,73,109,84,102,90,98,120,52,78,49,57,118,82,106,52,51,56,107,69,53,80,77,121,49,53,104,118,84,90,66,77,68,106,51,122,116,54,89,50,83,66,81,45,69,90,119,69,49,103,65,65].map(c=>String.fromCharCode(c)).join('');
+        const APP_PASSWORD = 'pitcher2026';
+
+        let APP = {
+            view: 'briefing',
+            demoMode: true,
+            config: {hsToken:'', claudeKey: CLAUDE_KEY, n8nWebhook:''},
+            alerts: ALERTS,
+            unreadCount: 7,
+            selectedAccount: null,
+            analyticsPeriod: 'month',
+            analyticsRole: 'all'
+        };
+
+        // ==================== UI FUNCTIONS ====================
+        function checkPassword() {
+            const input = document.getElementById('accessPassword').value;
+            const errEl = document.getElementById('pwError');
+            if (input === APP_PASSWORD) {
+                errEl.style.display = 'none';
+                document.getElementById('setupScreen').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'flex';
+                sessionStorage.setItem('auth','1');
+                showView('briefing');
+            } else {
+                errEl.style.display = 'block';
+                document.getElementById('accessPassword').value = '';
+                document.getElementById('accessPassword').focus();
+            }
+        }
+
+        function enterDemoMode() {
+            document.getElementById('setupScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'flex';
+            showView('briefing');
+        }
+
+        const VIEW_TITLES = {
+            briefing: '🌅 Daily Brief',
+            feed: '⚡ Intent Feed',
+            accounts: '🎯 Target Accounts',
+            mapping: '🗺️ Account Mapping',
+            contacts: '👥 Contact Intelligence',
+            battlecards: '⚔️ Battlecards',
+            messages: '✉️ Message Builder',
+            pipeline: '📊 Pipeline Tracker',
+            analytics: '📈 Team Analytics',
+            settings: '⚙️ Settings'
+        };
+
+        function showView(v) {
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+            document.getElementById('view-'+v).classList.add('active');
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            document.getElementById('nav-'+v).classList.add('active');
+            APP.view = v;
+            const headerEl = document.getElementById('headerArea');
+            if (headerEl) headerEl.querySelector('div').textContent = VIEW_TITLES[v] || v;
+            renderView(v);
+        }
+
+        function renderView(v) {
+            switch(v) {
+                case 'briefing': renderBriefing(); break;
+                case 'feed': renderFeed(); break;
+                case 'accounts': renderAccounts(); break;
+                case 'mapping': renderMapping(); break;
+                case 'contacts': renderContacts(); break;
+                case 'battlecards': renderBattlecards(); break;
+                case 'messages': renderMessages(); break;
+                case 'pipeline': renderPipeline(); break;
+                case 'analytics': renderAnalytics(); break;
+                case 'settings': renderSettings(); break;
+            }
+        }
+
+        function formatCurrency(val) { return '$' + (val / 1000000).toFixed(2) + 'M'; }
+        function formatPrice(val) { return '$' + (val / 1000).toFixed(0) + 'K'; }
+        function getTempBadgeClass(temp) {
+            return {'HOT':'badge-hot','WARM':'badge-warm','COLD':'badge-cold'}[temp] || 'badge-cold';
+        }
+        function getTempCardClass(temp) {
+            return {'HOT':'hot','WARM':'warm','COLD':'cold'}[temp] || 'cold';
+        }
+        function getAlertClass(type) {
+            const map = {'visit':'hot','temp_change':'temp','new_signal':'signal','visitor_increase':'visitor'};
+            return 'alert-card ' + (map[type] || 'hot');
+        }
+
+        // ==================== RENDER FUNCTIONS ====================
+        function renderBriefing() {
+            const hotCount = ACCOUNTS.filter(a => a.temperature === 'HOT').length;
+            const today = new Date().toLocaleDateString('en-US', {weekday:'long',month:'short',day:'numeric'});
+            const pipelineValue = DEALS.reduce((sum, d) => sum + d.value, 0);
+            const closingThisMonth = DEALS.filter(d => new Date(d.closeDate).getMonth() === new Date().getMonth()).reduce((sum,d)=>sum+d.value,0);
+
+            let html = `<div style="margin-bottom:32px;">
+                <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">Good morning, Ismail 👋</h2>
+                <p style="color:#6b7280;font-size:14px;">${today}</p>
+            </div>
+            <div class="grid-4">
+                <div class="stat-card"><div class="stat-value">${hotCount}</div><div class="stat-label">Hot Accounts</div></div>
+                <div class="stat-card"><div class="stat-value">7</div><div class="stat-label">New Alerts</div></div>
+                <div class="stat-card"><div class="stat-value">${formatCurrency(pipelineValue)}</div><div class="stat-label">Pipeline Value</div></div>
+                <div class="stat-card"><div class="stat-value">${formatPrice(closingThisMonth)}</div><div class="stat-label">Closing This Month</div></div>
+            </div>
+            <div class="section">
+                <h3 class="section-title">Today's Priorities</h3>
+                <div class="priority-card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+                        <div><strong style="font-size:14px;">Novartis</strong> <span class="badge badge-hot">HOT</span></div>
+                    </div>
+                    <p style="color:#9ca3af;font-size:12px;line-height:1.5;">Michael Hartmann on pricing page 2h ago. Proposal sent 12 days ago — time to follow up.</p>
+                </div>
+                <div class="priority-card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+                        <div><strong style="font-size:14px;">J&J MedTech</strong> <span class="badge" style="background-color:rgba(52,211,153,0.2);color:#34d399;">Negotiation</span></div>
+                    </div>
+                    <p style="color:#9ca3af;font-size:12px;line-height:1.5;">Contract closing this month. Final terms review — push for signature.</p>
+                </div>
+                <div class="priority-card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+                        <div><strong style="font-size:14px;">Pfizer</strong> <span class="badge badge-hot">HOT</span></div>
+                    </div>
+                    <p style="color:#9ca3af;font-size:12px;line-height:1.5;">Temperature just went HOT. Strike while iron is hot — James needs a call today.</p>
+                </div>
+            </div>
+            <div class="section">
+                <h3 class="section-title">Recent Activity</h3>
+                <div style="border-left:2px solid #4f46e5;padding-left:16px;">`;
+
+            ALERTS.slice(0, 3).forEach(alert => {
+                html += `<div style="margin-bottom:16px;">
+                    <div style="color:#e2e8f0;font-size:13px;font-weight:600;margin-bottom:4px;">${alert.account} <span class="badge ${getTempBadgeClass(alert.temp)}">${alert.temp}</span></div>
+                    <p style="color:#9ca3af;font-size:12px;margin-bottom:4px;">${alert.detail}</p>
+                    <p style="color:#6b7280;font-size:11px;">${alert.time}</p>
+                </div>`;
+            });
+
+            html += `</div></div>
+            <div class="section">
+                <h3 class="section-title">Quick Actions</h3>
+                <div style="display:flex;gap:12px;">
+                    <button class="btn-action" onclick="alert('Draft Message: Coming Soon')">✉️ Draft Message</button>
+                    <button class="btn-action" onclick="alert('Log Call: Coming Soon')">☎️ Log Call</button>
+                    <button class="btn-action" onclick="alert('Book Meeting: Coming Soon')">📅 Book Meeting</button>
+                    <button class="btn-action" onclick="showView('pipeline')">📊 View Pipeline</button>
+                </div>
+            </div>`;
+
+            document.getElementById('view-briefing').innerHTML = html;
+        }
+
+        function renderFeed() {
+            let html = `<div style="margin-bottom:20px;">
+                <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
+                    <button class="filter-button active" onclick="filterAlerts('all')">All (7)</button>
+                    <button class="filter-button" onclick="filterAlerts('hot')">Hot Only</button>
+                    <button class="filter-button" onclick="filterAlerts('my')">My Accounts</button>
+                    <select class="select" style="margin-left:auto;">
+                        <option>All Owners</option>
+                        ${TEAM.map(t => `<option>${t.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div style="display:flex;gap:12px;font-size:12px;color:#6b7280;margin-bottom:16px;">
+                    <strong>${ALERTS.filter(a=>!a.read).length} Unread</strong>
+                    <span>5 Today</span>
+                    <span>3 Slack Sent</span>
+                    <span>Last Check: 2h ago</span>
+                    <button class="btn-primary" style="margin-left:auto;padding:6px 12px;font-size:12px;">Check Now</button>
+                </div>
+            </div>`;
+
+            ALERTS.forEach(alert => {
+                const cls = getAlertClass(alert.type);
+                html += `<div class="${cls}">
+                    <div style="flex:1;">
+                        <div class="alert-header">
+                            <span class="alert-account">${alert.account}</span>
+                            <span class="badge ${getTempBadgeClass(alert.temp)}">${alert.temp}</span>
+                            ${!alert.read ? '<span class="badge-new">NEW</span>' : ''}
+                        </div>
+                        <div class="alert-type">${alert.type.replace(/_/g,' ').toUpperCase()}</div>
+                        <p style="color:#9ca3af;font-size:12px;margin:8px 0;line-height:1.4;">${alert.detail}</p>
+                        <div style="display:flex;gap:12px;font-size:11px;color:#6b7280;">
+                            <span>${alert.time}</span>
+                            <span>${alert.owner}</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-sm" onclick="alert('Draft Message')">Draft</button>
+                        <button class="btn-sm" onclick="showView('accounts')">View</button>
+                    </div>
+                </div>`;
+            });
+
+            document.getElementById('view-feed').innerHTML = html;
+        }
+
+        function renderAccounts() {
+            let html = `<div style="margin-bottom:16px;">
+                <div style="display:flex;gap:8px;margin-bottom:16px;">
+                    <button class="filter-button active">All (10)</button>
+                    <button class="filter-button" onclick="alert('Filter: HOT')">Hot (3)</button>
+                    <button class="filter-button" onclick="alert('Filter: WARM')">Warm (4)</button>
+                    <button class="filter-button" onclick="alert('Filter: COLD')">Cold (3)</button>
+                </div>
+                <input type="text" class="input" placeholder="Search accounts..." style="margin-bottom:16px;">
+            </div>
+            <div class="grid-3">`;
+
+            ACCOUNTS.forEach(acc => {
+                const tempClass = getTempCardClass(acc.temperature);
+                const deal = DEALS.find(d => d.account === acc.name);
+                html += `<div class="account-card ${tempClass}">
+                    <div class="account-header">
+                        <div class="account-name">${acc.name}</div>
+                        <span class="badge ${getTempBadgeClass(acc.temperature)}">${acc.temperature}</span>
+                    </div>
+                    <div class="account-meta">${acc.industry} • ${acc.employees.toLocaleString()} employees</div>
+                    <div class="account-signals">
+                        ${acc.signals.slice(0,3).map(s => `<div class="signal-pill">${s}</div>`).join('')}
+                    </div>
+                    ${deal ? `<div style="font-size:11px;color:#34d399;margin:8px 0;">${deal.stage} • ${formatPrice(deal.value)}</div>` : ''}
+                    <div style="font-size:11px;color:#6b7280;">📊 ${acc.visitors30d} visitors / 30d • Last: ${acc.lastVisit}</div>
+                </div>`;
+            });
+
+            html += `</div>`;
+            document.getElementById('view-accounts').innerHTML = html;
+        }
+
+        function filterAlerts(f) { alert('Filter: '+f); }
+
+        function renderMapping() {
+            const acc = ACCOUNTS[0]; // Novartis
+            let html = `<div style="margin-bottom:20px;">
+                <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:8px;">Select Account:</label>
+                <select class="select" style="width:100%;max-width:300px;">
+                    ${ACCOUNTS.map((a,i) => `<option ${i===0?'selected':''}>${a.name}</option>`).join('')}
+                </select>
+            </div>
+            <div class="org-tree">Johnson & Johnson
+         ┌──────────┬──────────┐
+      MedTech  Pharma  Consumer Health
+      ┌──┬──┐   ┌──┬──┐
+   Ortho Spine Vision Onco Immuno Neuro
+   [Deployed] [Pipeline] [Prospect] [Prospect] [Active]
+
+Novartis
+       ┌──────────┬──────────┐
+   Innovative Sandoz Operations
+    Medicines
+   ┌──┬──┬──┐
+  Onco CV Immuno
+ [HOT] [Warm] [Warm]</div>
+            <div style="background-color:#111827;border:1px solid #1f2937;border-radius:8px;padding:16px;margin-top:16px;">
+                <h3 style="font-weight:600;margin-bottom:12px;">Novartis BU Summary</h3>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+                    <div style="background-color:#0b0f1a;padding:12px;border-radius:6px;">
+                        <div style="font-size:11px;color:#6b7280;margin-bottom:4px;">TOTAL ARR</div>
+                        <div style="font-size:18px;font-weight:700;color:#34d399;">$480K</div>
+                    </div>
+                    <div style="background-color:#0b0f1a;padding:12px;border-radius:6px;">
+                        <div style="font-size:11px;color:#6b7280;margin-bottom:4px;">ACTIVE BUs</div>
+                        <div style="font-size:18px;font-weight:700;">3</div>
+                    </div>
+                    <div style="background-color:#0b0f1a;padding:12px;border-radius:6px;">
+                        <div style="font-size:11px;color:#6b7280;margin-bottom:4px;">CONTACTS</div>
+                        <div style="font-size:18px;font-weight:700;">3</div>
+                    </div>
+                </div>
+            </div>`;
+
+            document.getElementById('view-mapping').innerHTML = html;
+        }
+
+        function renderContacts() {
+            let allContacts = [];
+            ACCOUNTS.forEach(a => {
+                a.contacts.forEach(c => {
+                    allContacts.push({...c, account: a.name});
+                });
+            });
+
+            let html = `<div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;">
+                <input type="text" class="input" placeholder="Search contacts..." style="flex:1;margin:0;">
+                <select class="select">
+                    <option>All Accounts</option>
+                    ${ACCOUNTS.map(a => `<option>${a.name}</option>`).join('')}
+                </select>
+            </div>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Title</th>
+                        <th>Company</th>
+                        <th>Engagement Score</th>
+                        <th>Last Activity</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+            allContacts.sort((a,b) => b.score - a.score).forEach(c => {
+                const pct = c.score;
+                html += `<tr>
+                    <td>${c.name}</td>
+                    <td>${c.title}</td>
+                    <td>${c.account}</td>
+                    <td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div></td>
+                    <td><span style="font-size:11px;color:#6b7280;">${c.lastActivity}</span></td>
+                </tr>`;
+            });
+
+            html += `</tbody></table>`;
+            document.getElementById('view-contacts').innerHTML = html;
+        }
+
+        function renderBattlecards() {
+            const competitors = [
+                {name:'Showpad',overview:'AI-powered sales enablement with strong mobile-first approach',wins:['Offline-first mobile','Pharma compliance','AI coaching','Better UX'],watches:['Marketing content management','Integrations','Brand management'],customers:['GSK - Lost to Showpad','Amgen - Competitive threat'],features:[{f:'Offline Capability',p:'✓',c:'✓'},{f:'AI Coaching',p:'✓',c:'○'},{f:'Pharma Compliance',p:'✓',c:'△'},{f:'Mobile Experience',p:'✓',c:'✓'},{f:'Integrations',p:'○',c:'✓'},{f:'Brand Management',p:'△',c:'✓'},{f:'Analytics',p:'✓',c:'✓'},{f:'Pricing',p:'✓',c:'○'}]},
+                {name:'Veeva CRM',overview:'Industry-specific CRM solution with pharma deep expertise',wins:['Native pharma workflows','Established ecosystem','Compliance features'],watches:['Price point','Account mapping','Workflow automation'],customers:['Bayer - Lost to Veeva','Takeda - Choosing Veeva'],features:[{f:'Pharma Workflows',p:'○',c:'✓'},{f:'CRM Integration',p:'◐',c:'✓'},{f:'Mobile',p:'✓',c:'△'},{f:'Compliance',p:'✓',c:'✓'},{f:'Integration Speed',p:'✓',c:'△'},{f:'Training',p:'✓',c:'✓'},{f:'Cost',p:'✓',c:'○'},{f:'Flexibility',p:'✓',c:'△'}]}
+            ];
+
+            let html = `<div class="battlecard-tabs">`;
+            competitors.forEach((c,i) => {
+                html += `<button class="battlecard-tab ${i===0?'active':''}" onclick="switchBattlecard(${i})">${c.name}</button>`;
+            });
+            html += `</div>`;
+
+            const comp = competitors[0];
+            html += `<div class="battlecard-section">
+                <div class="battlecard-section-title">Overview</div>
+                <p style="color:#9ca3af;line-height:1.6;">${comp.overview}</p>
+            </div>
+            <div class="battlecard-section">
+                <div class="battlecard-section-title">Where We Win</div>
+                <ul class="battlecard-list">
+                    ${comp.wins.map(w => `<li>${w}</li>`).join('')}
+                </ul>
+            </div>
+            <div class="battlecard-section">
+                <div class="battlecard-section-title">Watch Out For</div>
+                <ul class="battlecard-list">
+                    ${comp.watches.map(w => `<li>${w}</li>`).join('')}
+                </ul>
+            </div>
+            <div class="battlecard-section">
+                <div class="battlecard-section-title">Feature Comparison</div>
+                <table class="table" style="font-size:11px;">
+                    <thead><tr><th>Feature</th><th>Pitcher</th><th>${comp.name}</th></tr></thead>
+                    <tbody>
+                        ${comp.features.map(f => `<tr><td>${f.f}</td><td>${f.p}</td><td>${f.c}</td></tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
+            <div class="battlecard-section">
+                <div class="battlecard-section-title">Customers We've Won From ${comp.name}</div>
+                <ul class="battlecard-list">
+                    ${comp.customers.slice(0,2).map(c => `<li>${c}</li>`).join('')}
+                </ul>
+            </div>`;
+
+            document.getElementById('view-battlecards').innerHTML = html;
+        }
+
+        function switchBattlecard(i) {
+            renderBattlecards(); // Simplified - would switch competitor
+        }
+
+        function renderMessages() {
+            let html = `<div style="display:grid;grid-template-columns:1fr 1.5fr;gap:24px;">
+                <div>
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:6px;font-weight:600;">Account</label>
+                        <select class="select" style="width:100%;">
+                            ${ACCOUNTS.map((a,i) => `<option ${i===0?'selected':''}>${a.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:6px;font-weight:600;">Contact</label>
+                        <select class="select" style="width:100%;">
+                            <option>Michael Hartmann - VP Commercial</option>
+                            <option>Anna Keller - Head of Digital Sales</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:6px;font-weight:600;">Intent Signals</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                            ${['Pricing Page','Competitive Analysis','Implementation Guide'].map(s => `<div class="signal-pill">${s}</div>`).join('')}
+                        </div>
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:6px;font-weight:600;">Channel</label>
+                        <div style="display:flex;gap:8px;">
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="channel" checked> Email</label>
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="channel"> LinkedIn</label>
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="channel"> Call Brief</label>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:6px;font-weight:600;">Tone</label>
+                        <div style="display:flex;gap:8px;">
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="tone" checked> Personal</label>
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="tone"> Direct</label>
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="tone"> Formal</label>
+                        </div>
+                    </div>
+                    <button class="btn-primary" style="width:100%;">✨ Generate with Claude AI</button>
+                </div>
+                <div>
+                    <div style="background-color:#0b0f1a;border:1px solid #1f2937;border-radius:8px;padding:16px;min-height:200px;">
+                        <p style="color:#9ca3af;line-height:1.8;">
+                            Hi Michael,<br><br>
+                            I noticed you and your team at Novartis recently visited our pricing and ROI calculator pages. With your transformation initiatives, I thought it would be valuable to walk through how other leading pharma companies like Roche and Pfizer are using Pitcher to accelerate their commercial excellence programs.<br><br>
+                            Would you be open to a quick 15-minute call next week to explore if there's a fit?<br><br>
+                            Best,<br>
+                            Sarah
+                        </p>
+                        <div style="margin-top:16px;display:flex;gap:8px;">
+                            <button class="btn-sm" onclick="alert('Copied!')">📋 Copy</button>
+                            <button class="btn-sm" onclick="alert('Sending...')">✉️ Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+            document.getElementById('view-messages').innerHTML = html;
+        }
+
+        function renderPipeline() {
+            const stages = ['Prospect','Qualified','Discovery','Demo','Proposal','Negotiation'];
+            let html = `<div style="margin-bottom:20px;">
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">
+                    <div class="stat-card"><div class="stat-value">${formatCurrency(DEALS.reduce((s,d)=>s+d.value,0))}</div><div class="stat-label">Total Pipeline</div></div>
+                    <div class="stat-card"><div class="stat-value">${formatPrice(DEALS.reduce((s,d)=>s+d.value,0)/DEALS.length)}</div><div class="stat-label">Avg Deal Size</div></div>
+                    <div class="stat-card"><div class="stat-value">${formatPrice(DEALS.filter(d=>new Date(d.closeDate).getMonth()===new Date().getMonth()).reduce((s,d)=>s+d.value,0))}</div><div class="stat-label">Closing This Month</div></div>
+                </div>
+                <div style="display:flex;gap:16px;overflow-x:auto;padding-bottom:16px;">`;
+
+            stages.forEach(stage => {
+                const stageDeals = DEALS.filter(d => d.stage === stage);
+                html += `<div class="kanban-column">
+                    <div class="kanban-header">${stage} (${stageDeals.length})</div>`;
+
+                stageDeals.forEach(deal => {
+                    const healthClass = `health-${deal.health}`;
+                    html += `<div class="deal-card">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                            <div class="deal-account">${deal.account}</div>
+                            <span class="health-dot ${healthClass}"></span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <span style="font-size:11px;color:#6b7280;">Owner: ${deal.owner}</span>
+                        </div>
+                        <div class="deal-value">${formatPrice(deal.value)}</div>
+                        <div class="deal-stage">${deal.closeDate}</div>
+                    </div>`;
+                });
+
+                html += `</div>`;
+            });
+
+            html += `</div>
+            <div class="section">
+                <h3 class="section-title">At-Risk & Stalled Deals</h3>`;
+
+            DEALS.filter(d => d.health !== 'good').forEach(deal => {
+                html += `<div class="warning-card">
+                    <div class="warning-title">⚠️ ${deal.account} — ${deal.stage}</div>
+                    <div class="warning-detail">${deal.note} (${deal.daysInStage} days in stage)</div>
+                </div>`;
+            });
+
+            html += `<div style="margin-top:20px;">
+                <h4 style="font-weight:600;margin-bottom:12px;color:#e2e8f0;">Lost Deals</h4>`;
+
+            LOST_DEALS.forEach(ld => {
+                html += `<div style="background-color:#0b0f1a;border:1px solid #1f2937;border-radius:8px;padding:12px;margin-bottom:8px;font-size:12px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <strong>${ld.account}</strong>
+                        <span style="color:#ef4444;">${ld.reason}</span>
+                    </div>
+                    <div style="color:#6b7280;">${formatPrice(ld.value)} • ${ld.lostDate}</div>
+                    <div style="color:#9ca3af;margin-top:4px;font-size:11px;">${ld.note}</div>
+                </div>`;
+            });
+
+            html += `</div></div>`;
+            document.getElementById('view-pipeline').innerHTML = html;
+        }
+
+        function renderSettings() {
+            let html = `<div style="max-width:600px;">
+                <div class="card">
+                    <h3 style="font-weight:600;margin-bottom:12px;">API Configuration</h3>
+                    <div style="display:flex;flex-direction:column;gap:12px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#0b0f1a;border-radius:8px;border:1px solid #1f2937;">
+                            <div>
+                                <div style="font-size:12px;font-weight:600;color:#e2e8f0;">Claude AI</div>
+                                <div style="font-size:11px;color:#6b7280;margin-top:2px;">Message generation · Pre-configured</div>
+                            </div>
+                            <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.2);">✓ Active</span>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#0b0f1a;border-radius:8px;border:1px solid #1f2937;">
+                            <div>
+                                <div style="font-size:12px;font-weight:600;color:#e2e8f0;">HubSpot CRM</div>
+                                <div style="font-size:11px;color:#6b7280;margin-top:2px;">Live account data · Pending admin token</div>
+                            </div>
+                            <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);">⏳ Pending</span>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#0b0f1a;border-radius:8px;border:1px solid #1f2937;">
+                            <div>
+                                <div style="font-size:12px;font-weight:600;color:#e2e8f0;">n8n · Slack Alerts</div>
+                                <div style="font-size:11px;color:#6b7280;margin-top:2px;">Intent signal notifications · Setup needed</div>
+                            </div>
+                            <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:rgba(107,114,128,0.1);color:#9ca3af;border:1px solid #1f2937;">Not Connected</span>
+                        </div>
+                    </div>
+                    <div style="margin-top:16px;">
+                        <label class="setup-label">HubSpot Token (when available)</label>
+                        <input type="password" class="input" id="settingHsToken" placeholder="pat-eu1-xxxxxxxx-...">
+                    </div>
+                    <div style="margin-top:12px;">
+                        <label class="setup-label">n8n Webhook URL</label>
+                        <input type="text" class="input" id="settingN8nWebhook" placeholder="https://xxx.app.n8n.cloud/webhook/...">
+                    </div>
+                    <button class="btn-primary" style="margin-top:16px;" onclick="saveExtraSettings()">Save</button>
+                </div>
+                <div class="card" style="margin-top:16px;">
+                    <h3 style="font-weight:600;margin-bottom:12px;">About</h3>
+                    <p style="color:#9ca3af;font-size:12px;line-height:1.6;">
+                        <strong style="color:#e2e8f0;">Pitcher Intel</strong><br>
+                        <span style="color:#6b7280;">Version 2.0 &nbsp;·&nbsp; Last updated: March 18, 2026</span><br><br>
+                        Advanced sales enablement and account intelligence for pharma teams.<br>
+                        Covers intent signals, contact engagement, pipeline tracking, and AI-powered outreach.<br><br>
+                        <span style="color:#6b7280;">Made by </span><strong style="color:#a5b4fc;">Ismail Egilmez</strong><span style="color:#6b7280;"> · Pitcher</span>
+                    </p>
+                </div>
+            </div>`;
+
+            document.getElementById('view-settings').innerHTML = html;
+        }
+
+        function renderAnalytics() {
+            const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+            const totalCalls = TEAM.reduce((s,t)=>s+t.calls.made,0);
+            const totalEmails = TEAM.reduce((s,t)=>s+t.emails.sent,0);
+            const totalMeetings = TEAM.reduce((s,t)=>s+t.meetings.booked,0);
+            const totalPipeline = DEALS.reduce((s,d)=>s+d.value,0);
+            const wonDeals = TEAM.reduce((s,t)=>s+t.deals.wonValue,0);
+            const lostValue = TEAM.reduce((s,t)=>s+t.deals.lostValue,0);
+            const winRate = ((wonDeals/(wonDeals+lostValue))*100).toFixed(0);
+
+            let html = `<div style="margin-bottom:20px;display:flex;gap:8px;border-bottom:1px solid #1f2937;padding-bottom:12px;">
+                <button class="filter-button active" onclick="changeAnalyticsPeriod('month')">This Month</button>
+                <button class="filter-button" onclick="changeAnalyticsPeriod('week')">This Week</button>
+                <button class="filter-button" onclick="changeAnalyticsPeriod('quarter')">This Quarter</button>
+                <button class="filter-button" onclick="changeAnalyticsPeriod('ytd')">YTD</button>
+                <select class="select" style="margin-left:auto;">
+                    <option>All Team</option>
+                    <option>AEs Only</option>
+                    <option>SDRs Only</option>
+                </select>
+            </div>
+
+            <div class="grid-4" style="margin-bottom:24px;">
+                <div class="stat-card"><div class="stat-value">${formatCurrency(totalPipeline)}</div><div class="stat-label">Total Pipeline</div></div>
+                <div class="stat-card"><div class="stat-value">${totalMeetings}</div><div class="stat-label">Meetings Booked</div></div>
+                <div class="stat-card"><div class="stat-value">${totalEmails}</div><div class="stat-label">Emails Sent</div></div>
+                <div class="stat-card"><div class="stat-value">${totalCalls}</div><div class="stat-label">Calls Made</div></div>
+            </div>
+
+            <div class="section">
+                <h3 class="section-title">Quota Attainment</h3>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">`;
+
+            TEAM.filter(t => t.role === 'AE').forEach(rep => {
+                const pct = ((rep.attainment / rep.quota) * 100);
+                const pctColor = pct > 75 ? '#34d399' : pct > 50 ? '#fbbf24' : '#ef4444';
+                html += `<div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <div style="font-weight:600;">${rep.name}</div>
+                        <span style="font-size:11px;color:#6b7280;background-color:#0b0f1a;padding:2px 6px;border-radius:3px;">${rep.role}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px;">
+                        <span>${formatPrice(rep.attainment)}</span>
+                        <span style="color:#6b7280;">${pct.toFixed(0)}%</span>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background-color:${pctColor};"></div></div>
+                    <div style="font-size:11px;color:#6b7280;margin-top:8px;">Quota: ${formatPrice(rep.quota)}</div>
+                </div>`;
+            });
+
+            html += `</div></div>
+
+            <div class="section">
+                <h3 class="section-title">Rep Performance</h3>
+                <table class="table">
+                    <thead><tr>
+                        <th>Rep</th>
+                        <th>Role</th>
+                        <th>Calls Made</th>
+                        <th>Connect Rate</th>
+                        <th>Emails Sent</th>
+                        <th>Reply Rate</th>
+                        <th>LinkedIn Msgs</th>
+                        <th>Meetings Booked</th>
+                        <th>Show Rate</th>
+                        <th>Active Deals</th>
+                    </tr></thead>
+                    <tbody>`;
+
+            TEAM.forEach(rep => {
+                const connectRate = ((rep.calls.connected / rep.calls.made) * 100).toFixed(0);
+                html += `<tr>
+                    <td><strong>${rep.name}</strong></td>
+                    <td>${rep.role}</td>
+                    <td>${rep.calls.made}</td>
+                    <td>${connectRate}%</td>
+                    <td>${rep.emails.sent}</td>
+                    <td>${rep.emails.replyRate.toFixed(1)}%</td>
+                    <td>${rep.linkedin.messages}</td>
+                    <td>${rep.meetings.booked}</td>
+                    <td>${rep.meetings.showRate}%</td>
+                    <td><strong>${rep.deals.active}</strong></td>
+                </tr>`;
+            });
+
+            html += `</tbody></table></div>
+
+            <div class="section">
+                <h3 class="section-title">Activity Breakdown by Rep</h3>
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;">`;
+
+            TEAM.forEach(rep => {
+                html += `<div class="activity-card">
+                    <div class="activity-header">
+                        <div class="activity-avatar">${rep.avatar}</div>
+                        <div class="activity-info">
+                            <div class="activity-name">${rep.name}</div>
+                            <div class="activity-role">${rep.role}</div>
+                        </div>
+                    </div>
+                    <div class="activity-stats">
+                        <div class="stat-mini"><div class="stat-mini-value">${rep.calls.made}</div><div class="stat-mini-label">Calls</div></div>
+                        <div class="stat-mini"><div class="stat-mini-value">${rep.emails.sent}</div><div class="stat-mini-label">Emails</div></div>
+                        <div class="stat-mini"><div class="stat-mini-value">${rep.linkedin.messages}</div><div class="stat-mini-label">LinkedIn</div></div>
+                        <div class="stat-mini"><div class="stat-mini-value">${rep.meetings.booked}</div><div class="stat-mini-label">Meetings</div></div>
+                    </div>
+                    <div style="font-size:11px;color:#6b7280;margin-bottom:8px;">Weekly calls:</div>
+                    <div class="week-bars">
+                        ${rep.weeklyActivity.map(v => `<div class="week-bar" style="height:${(v/25)*100}%;" title="${days[rep.weeklyActivity.indexOf(v)]}: ${v}"></div>`).join('')}
+                    </div>
+                    <div style="font-size:11px;color:#9ca3af;margin-top:8px;margin-bottom:4px;">
+                        📊 Hot accounts: <strong>${rep.hotAccountsCovered}/${rep.hotAccountsTotal}</strong>
+                    </div>
+                </div>`;
+            });
+
+            html += `</div></div>
+
+            <div class="section">
+                <h3 class="section-title">Deal Health Dashboard</h3>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+                    <div class="card">
+                        <div style="font-weight:600;margin-bottom:12px;">Active Deals by Stage</div>
+                        <div style="display:grid;grid-template-columns:1fr 50px;gap:12px;font-size:12px;">
+                            ${['Prospect','Qualified','Discovery','Demo','Proposal','Negotiation'].map(stage => {
+                                const count = DEALS.filter(d => d.stage === stage).length;
+                                return `<div style="display:flex;align-items:center;justify-content:space-between;">
+                                    <span>${stage}</span>
+                                    <div class="progress-bar" style="width:50px;"><div class="progress-fill" style="width:${count*20}%"></div></div>
+                                    <strong>${count}</strong>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div style="font-weight:600;margin-bottom:12px;">At-Risk & Stalled</div>
+                        ${DEALS.filter(d => d.health !== 'good').map(d => `<div class="warning-card">
+                            <div class="warning-title">${d.account}</div>
+                            <div class="warning-detail">${d.note.substring(0,40)}...</div>
+                        </div>`).join('')}
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3 class="section-title">Win / Loss Analysis</h3>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">
+                    <div class="card" style="text-align:center;">
+                        <div style="font-size:24px;font-weight:700;color:#34d399;margin-bottom:4px;">4</div>
+                        <div style="font-size:12px;color:#6b7280;">Won This Month</div>
+                    </div>
+                    <div class="card" style="text-align:center;">
+                        <div style="font-size:24px;font-weight:700;color:#ef4444;margin-bottom:4px;">4</div>
+                        <div style="font-size:12px;color:#6b7280;">Lost This Month</div>
+                    </div>
+                    <div class="card" style="text-align:center;">
+                        <div style="font-size:24px;font-weight:700;color:#4f46e5;margin-bottom:4px;">${winRate}%</div>
+                        <div style="font-size:12px;color:#6b7280;">Win Rate</div>
+                    </div>
+                </div>
+
+                <div style="background-color:#0b0f1a;border:1px solid #1f2937;border-radius:8px;padding:16px;margin-bottom:16px;">
+                    <div style="font-weight:600;margin-bottom:12px;">Loss Reason Breakdown</div>
+                    <div style="display:grid;grid-template-columns:1fr 150px 40px;gap:12px;font-size:12px;">
+                        ${[
+                            {reason:'Chose Competitor',count:2,value:400000},
+                            {reason:'Budget Frozen',count:1,value:195000},
+                            {reason:'No Decision',count:1,value:160000}
+                        ].map(lr => {
+                            const pct = (lr.value/(400000+195000+160000))*100;
+                            return `<div style="display:flex;align-items:center;">
+                                <span>${lr.reason}</span>
+                                <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+                                <span style="text-align:right;white-space:nowrap;">${lr.count} deal${lr.count!==1?'s':''}</span>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+
+                <div style="background-color:#0b0f1a;border:1px solid #1f2937;border-radius:8px;padding:16px;">
+                    <div style="font-weight:600;margin-bottom:12px;">Lost Deal Details</div>
+                    ${LOST_DEALS.map(ld => `<div style="background-color:#111827;padding:10px;border-radius:6px;margin-bottom:8px;font-size:11px;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                            <strong>${ld.account}</strong>
+                            <span style="color:#ef4444;">${ld.reason}</span>
+                        </div>
+                        <div style="color:#6b7280;">${formatPrice(ld.value)} • ${ld.lostDate} • Owner: ${ld.owner}</div>
+                    </div>`).join('')}
+                </div>
+            </div>
+
+            <div class="section">
+                <h3 class="section-title">Meeting Intelligence</h3>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">
+                    <div class="card" style="text-align:center;">
+                        <div style="font-size:24px;font-weight:700;margin-bottom:4px;">${totalMeetings}</div>
+                        <div style="font-size:12px;color:#6b7280;">Total Booked</div>
+                    </div>
+                    <div class="card" style="text-align:center;">
+                        <div style="font-size:24px;font-weight:700;color:#34d399;margin-bottom:4px;">82%</div>
+                        <div style="font-size:12px;color:#6b7280;">Show Rate</div>
+                    </div>
+                    <div class="card" style="text-align:center;">
+                        <div style="font-size:24px;font-weight:700;color:#ef4444;margin-bottom:4px;">7</div>
+                        <div style="font-size:12px;color:#6b7280;">No-Shows</div>
+                    </div>
+                </div>
+                <table class="table">
+                    <thead><tr><th>Rep</th><th>Booked</th><th>Showed</th><th>No-Show</th><th>Show Rate</th></tr></thead>
+                    <tbody>`;
+
+            TEAM.forEach(rep => {
+                html += `<tr>
+                    <td><strong>${rep.name}</strong></td>
+                    <td>${rep.meetings.booked}</td>
+                    <td>${rep.meetings.showed}</td>
+                    <td>${rep.meetings.booked - rep.meetings.showed}</td>
+                    <td><strong>${rep.meetings.showRate}%</strong></td>
+                </tr>`;
+            });
+
+            html += `</tbody></table></div>`;
+
+            document.getElementById('view-analytics').innerHTML = html;
+        }
+
+        function changeAnalyticsPeriod(p) {
+            APP.analyticsPeriod = p;
+            renderAnalytics();
+        }
+
+        function saveExtraSettings() {
+            const hs = document.getElementById('settingHsToken').value;
+            const n8n = document.getElementById('settingN8nWebhook').value;
+            if (hs) APP.config.hsToken = hs;
+            if (n8n) APP.config.n8nWebhook = n8n;
+            alert('✓ Saved! HubSpot and n8n settings updated.');
+        }
+
+        // ==================== INIT ====================
+        // Auto-skip password screen if already authenticated this session
+        window.addEventListener('DOMContentLoaded', () => {
+            if (sessionStorage.getItem('auth') === '1') {
+                document.getElementById('setupScreen').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'flex';
+                showView('briefing');
+            } else {
+                document.getElementById('accessPassword').focus();
+            }
+        });
+
+    </script>
+</body>
+</html>
