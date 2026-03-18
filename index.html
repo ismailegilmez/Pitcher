@@ -281,7 +281,7 @@
         let APP = {
             view: 'briefing',
             demoMode: true,
-            config: {hsToken:'', claudeKey: CLAUDE_KEY, n8nWebhook:''},
+            config: {hsToken:'', claudeKey: CLAUDE_KEY, n8nWebhook:'https://prebuccal-favoredly-hank.ngrok-free.dev/webhook/pitcher-account-research', n8nProspectWebhook:'https://prebuccal-favoredly-hank.ngrok-free.dev/webhook/pitcher-prospect-discovery'},
             alerts: ALERTS,
             unreadCount: 7,
             selectedAccount: null,
@@ -789,10 +789,10 @@ Novartis
                         </div>
                         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#0b0f1a;border-radius:8px;border:1px solid #1f2937;">
                             <div>
-                                <div style="font-size:12px;font-weight:600;color:#e2e8f0;">n8n · Slack Alerts</div>
-                                <div style="font-size:11px;color:#6b7280;margin-top:2px;">Intent signal notifications · Setup needed</div>
+                                <div style="font-size:12px;font-weight:600;color:#e2e8f0;">n8n Automation</div>
+                                <div style="font-size:11px;color:#6b7280;margin-top:2px;">Account research · Prospect discovery · Slack alerts</div>
                             </div>
-                            <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:rgba(107,114,128,0.1);color:#9ca3af;border:1px solid #1f2937;">Not Connected</span>
+                            <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.2);">✓ Connected</span>
                         </div>
                     </div>
                     <div style="margin-top:16px;">
@@ -800,8 +800,15 @@ Novartis
                         <input type="password" class="input" id="settingHsToken" placeholder="pat-eu1-xxxxxxxx-...">
                     </div>
                     <div style="margin-top:12px;">
-                        <label class="setup-label">n8n Webhook URL</label>
-                        <input type="text" class="input" id="settingN8nWebhook" placeholder="https://xxx.app.n8n.cloud/webhook/...">
+                        <label class="setup-label">n8n · Account Research Webhook</label>
+                        <input type="text" class="input" id="settingN8nWebhook" value="${APP.config.n8nWebhook}" placeholder="https://prebuccal-favoredly-hank.ngrok-free.dev/webhook/pitcher-account-research">
+                    </div>
+                    <div style="margin-top:12px;">
+                        <label class="setup-label">n8n · Prospect Discovery Webhook</label>
+                        <input type="text" class="input" id="settingN8nProspectWebhook" value="${APP.config.n8nProspectWebhook}" placeholder="https://prebuccal-favoredly-hank.ngrok-free.dev/webhook/pitcher-prospect-discovery">
+                    </div>
+                    <div style="margin-top:8px;padding:8px 12px;background:#0b0f1a;border-radius:6px;border:1px solid #1f2937;">
+                        <div style="font-size:11px;color:#6b7280;">⚠️ ngrok must be running: <code style="color:#a5b4fc;">ngrok http --domain=prebuccal-favoredly-hank.ngrok-free.dev 5678</code></div>
                     </div>
                     <button class="btn-primary" style="margin-top:16px;" onclick="saveExtraSettings()">Save</button>
                 </div>
@@ -1054,9 +1061,11 @@ Novartis
         function saveExtraSettings() {
             const hs = document.getElementById('settingHsToken').value;
             const n8n = document.getElementById('settingN8nWebhook').value;
+            const n8nProspect = document.getElementById('settingN8nProspectWebhook').value;
             if (hs) APP.config.hsToken = hs;
             if (n8n) APP.config.n8nWebhook = n8n;
-            alert('✓ Saved! HubSpot and n8n settings updated.');
+            if (n8nProspect) APP.config.n8nProspectWebhook = n8nProspect;
+            alert('✓ Saved! Settings updated.');
         }
 
         // ==================== INIT ====================
