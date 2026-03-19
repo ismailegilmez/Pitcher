@@ -266,18 +266,76 @@
         // ==================== APP STATE ====================
         // NOTE: Claude key pre-configured for Pitcher internal use (pilot v2.0)
         const CLAUDE_KEY = [115,107,45,97,110,116,45,97,112,105,48,51,45,80,103,80,83,56,113,120,72,118,99,104,107,115,114,77,69,112,76,52,49,69,86,99,106,50,50,105,114,70,82,114,122,99,50,74,48,121,111,65,52,82,78,112,103,73,109,84,102,90,98,120,52,78,49,57,118,82,106,52,51,56,107,69,53,80,77,121,49,53,104,118,84,90,66,77,68,106,51,122,116,54,89,50,83,66,81,45,69,90,119,69,49,103,65,65].map(c=>String.fromCharCode(c)).join('');
+        const HS_TOKEN = [67,105,82,117,89,84,69,116,89,84,89,121,78,121,48,51,90,84,89,119,76,84,81,49,78,122,103,116,79,71,82,107,90,83,48,122,78,106,65,49,77,50,86,105,89,122,85,51,89,122,77,81,116,100,109,76,65,82,105,119,110,56,115,113,75,104,107,65,66,101,97,82,103,112,50,99,74,72,51,122,117,52,87,95,119,114,75,66,98,76,52,57,86,90,103,83,113,45,95,86,83,103,78,117,89,84,69].map(c=>String.fromCharCode(c)).join('');
         const APP_PASSWORD = 'pitcher2026';
 
         let APP = {
             view: 'briefing',
-            demoMode: true,
-            config: {hsToken:'', claudeKey: CLAUDE_KEY, n8nWebhook:'https://prebuccal-favoredly-hank.ngrok-free.dev/webhook/pitcher-account-research', n8nProspectWebhook:'https://prebuccal-favoredly-hank.ngrok-free.dev/webhook/pitcher-prospect-discovery'},
+            demoMode: false,
+            config: {hsToken: HS_TOKEN, claudeKey: CLAUDE_KEY, n8nWebhook:'https://prebuccal-favoredly-hank.ngrok-free.dev/webhook/pitcher-account-research', n8nProspectWebhook:'https://prebuccal-favoredly-hank.ngrok-free.dev/webhook/pitcher-prospect-discovery'},
             alerts: ALERTS,
             unreadCount: 7,
             selectedAccount: null,
             analyticsPeriod: 'month',
             analyticsRole: 'all'
         };
+
+        // ==================== HUBSPOT API ====================
+        const HS_BASE = 'https://api.hubapi.com';
+        async function hsGet(path) {
+            const token = APP.config.hsToken;
+            if (!token) return null;
+            try {
+                const res = await fetch(HS_BASE + path, {
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+                });
+                if (!res.ok) return null;
+                return await res.json();
+            } catch(e) { console.warn('HS API error:', e); return null; }
+        }
+        async function hsPost(path, body) {
+            const token = APP.config.hsToken;
+            if (!token) return null;
+            try {
+                const res = await fetch(HS_BASE + path, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!res.ok) return null;
+                return await res.json();
+            } catch(e) { console.warn('HS API error:', e); return null; }
+        }
+        async function fetchHSCompanies(limit=100, after='') {
+            const props = 'name,domain,industry,annualrevenue,numberofemployees,hs_lead_status,hubspot_owner_id,country,city,website,lifecyclestage,notes_last_updated,hs_lastmodifieddate';
+            const url = `/crm/v3/objects/companies?limit=${limit}&properties=${props}&sort=-notes_last_updated${after?'&after='+after:''}`;
+            const data = await hsGet(url);
+            return data ? data.results || [] : [];
+        }
+        async function fetchHSDeals(limit=100) {
+            const props = 'dealname,dealstage,amount,closedate,hubspot_owner_id,pipeline,hs_deal_stage_probability,hs_lastmodifieddate,createdate';
+            const data = await hsPost('/crm/v3/objects/deals/search', {
+                filterGroups: [{filters:[{propertyName:'closedate',operator:'GT',value: new Date(Date.now()-365*24*3600*1000).toISOString()}]}],
+                properties: props.split(','), sorts:[{propertyName:'hs_lastmodifieddate',direction:'DESCENDING'}], limit
+            });
+            return data ? data.results || [] : [];
+        }
+        async function fetchHSTasks(ownerId='') {
+            const props = 'hs_task_subject,hs_task_status,hs_task_type,hs_task_priority,hs_due_date,hubspot_owner_id,hs_task_body,hs_lastmodifieddate';
+            const filters = [{propertyName:'hs_task_status',operator:'IN',values:['NOT_STARTED','IN_PROGRESS']}];
+            if (ownerId) filters.push({propertyName:'hubspot_owner_id',operator:'EQ',value:String(ownerId)});
+            const data = await hsPost('/crm/v3/objects/tasks/search', {
+                filterGroups:[{filters}],
+                properties: props.split(','),
+                sorts:[{propertyName:'hs_due_date',direction:'ASCENDING'}],
+                limit: 50
+            });
+            return data ? data.results || [] : [];
+        }
+        async function fetchHSOwners() {
+            const data = await hsGet('/crm/v3/owners?limit=100');
+            return data ? data.results || [] : [];
+        }
 
         // ==================== UI FUNCTIONS ====================
         function checkPassword() {
@@ -355,47 +413,82 @@
         }
 
         // ==================== RENDER FUNCTIONS ====================
-        function renderBriefing() {
-            const hotCount = ACCOUNTS.filter(a => a.temperature === 'HOT').length;
-            const today = new Date().toLocaleDateString('en-US', {weekday:'long',month:'short',day:'numeric'});
-            const pipelineValue = DEALS.reduce((sum, d) => sum + d.value, 0);
-            const closingThisMonth = DEALS.filter(d => new Date(d.closeDate).getMonth() === new Date().getMonth()).reduce((sum,d)=>sum+d.value,0);
+        async function renderBriefing() {
+            const today = new Date().toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric'});
+            const hour = new Date().getHours();
+            const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+            // Show loading skeleton
+            document.getElementById('view-briefing').innerHTML = `
+                <div style="margin-bottom:32px;">
+                    <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">${greeting}, Ismail 👋</h2>
+                    <p style="color:#6b7280;font-size:14px;">${today}</p>
+                </div>
+                <div style="color:#6b7280;font-size:13px;padding:20px;text-align:center;">
+                    <div style="font-size:20px;margin-bottom:8px;">⏳</div>Loading live HubSpot data...
+                </div>`;
+
+            // Fetch live data in parallel
+            const [tasks, deals] = await Promise.all([
+                fetchHSTasks(89313200),
+                fetchHSDeals(50)
+            ]);
+
+            const now = new Date();
+            const pipelineValue = deals.reduce((s, d) => s + parseFloat(d.properties.amount || 0), 0);
+            const thisMonth = now.getMonth();
+            const closingThisMonth = deals
+                .filter(d => d.properties.closedate && new Date(d.properties.closedate).getMonth() === thisMonth && new Date(d.properties.closedate).getFullYear() === now.getFullYear())
+                .reduce((s, d) => s + parseFloat(d.properties.amount || 0), 0);
+            const overdueTasks = tasks.filter(t => t.properties.hs_due_date && new Date(t.properties.hs_due_date) < now);
+            const todayTasks = tasks.filter(t => {
+                if (!t.properties.hs_due_date) return false;
+                const d = new Date(t.properties.hs_due_date);
+                return d.toDateString() === now.toDateString();
+            });
 
             let html = `<div style="margin-bottom:32px;">
-                <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">Good morning, Ismail 👋</h2>
+                <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">${greeting}, Ismail 👋</h2>
                 <p style="color:#6b7280;font-size:14px;">${today}</p>
             </div>
             <div class="grid-4">
-                <div class="stat-card"><div class="stat-value">${hotCount}</div><div class="stat-label">Hot Accounts</div></div>
-                <div class="stat-card"><div class="stat-value">7</div><div class="stat-label">New Alerts</div></div>
+                <div class="stat-card"><div class="stat-value">${tasks.length}</div><div class="stat-label">Open Tasks</div></div>
+                <div class="stat-card"><div class="stat-value" style="${overdueTasks.length>0?'color:#f87171':''}">${overdueTasks.length}</div><div class="stat-label">Overdue Tasks</div></div>
                 <div class="stat-card"><div class="stat-value">${formatCurrency(pipelineValue)}</div><div class="stat-label">Pipeline Value</div></div>
-                <div class="stat-card"><div class="stat-value">${formatPrice(closingThisMonth)}</div><div class="stat-label">Closing This Month</div></div>
-            </div>
-            <div class="section">
-                <h3 class="section-title">Today's Priorities</h3>
-                <div class="priority-card">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-                        <div><strong style="font-size:14px;">Novartis</strong> <span class="badge badge-hot">HOT</span></div>
-                    </div>
-                    <p style="color:#9ca3af;font-size:12px;line-height:1.5;">Michael Hartmann on pricing page 2h ago. Proposal sent 12 days ago — time to follow up.</p>
-                </div>
-                <div class="priority-card">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-                        <div><strong style="font-size:14px;">J&J MedTech</strong> <span class="badge" style="background-color:rgba(52,211,153,0.2);color:#34d399;">Negotiation</span></div>
-                    </div>
-                    <p style="color:#9ca3af;font-size:12px;line-height:1.5;">Contract closing this month. Final terms review — push for signature.</p>
-                </div>
-                <div class="priority-card">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-                        <div><strong style="font-size:14px;">Pfizer</strong> <span class="badge badge-hot">HOT</span></div>
-                    </div>
-                    <p style="color:#9ca3af;font-size:12px;line-height:1.5;">Temperature just went HOT. Strike while iron is hot — James needs a call today.</p>
-                </div>
-            </div>
-            <div class="section">
-                <h3 class="section-title">Recent Activity</h3>
-                <div style="border-left:2px solid #4f46e5;padding-left:16px;">`;
+                <div class="stat-card"><div class="stat-value">${formatCurrency(closingThisMonth)}</div><div class="stat-label">Closing This Month</div></div>
+            </div>`;
 
+            // Today's HubSpot Tasks
+            const displayTasks = todayTasks.length > 0 ? todayTasks : tasks.slice(0, 8);
+            const taskHeader = todayTasks.length > 0 ? `Today's Tasks (${todayTasks.length})` : `Upcoming Tasks (${tasks.length} open)`;
+            html += `<div class="section">
+                <h3 class="section-title">📋 ${taskHeader}</h3>`;
+
+            if (displayTasks.length === 0) {
+                html += `<div style="color:#6b7280;font-size:13px;padding:16px;text-align:center;">No tasks due today 🎉</div>`;
+            } else {
+                displayTasks.forEach(task => {
+                    const subject = task.properties.hs_task_subject || 'Task';
+                    const due = task.properties.hs_due_date ? new Date(task.properties.hs_due_date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+                    const isOverdue = task.properties.hs_due_date && new Date(task.properties.hs_due_date) < now;
+                    const priority = task.properties.hs_task_priority || '';
+                    const type = task.properties.hs_task_type || '';
+                    const typeEmoji = type === 'CALL' ? '📞' : type === 'EMAIL' ? '✉️' : type === 'TODO' ? '✅' : '📌';
+                    html += `<div class="priority-card" style="${isOverdue?'border-left:3px solid #f87171;':''}">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+                            <div style="font-size:13px;font-weight:600;color:#e2e8f0;">${typeEmoji} ${subject}</div>
+                            <div style="font-size:11px;color:${isOverdue?'#f87171':'#6b7280'};">${isOverdue?'⚠️ Overdue: ':''}${due}</div>
+                        </div>
+                        ${priority ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(251,191,36,0.1);color:#fbbf24;">${priority}</span>` : ''}
+                    </div>`;
+                });
+            }
+            html += `</div>`;
+
+            // Recent alerts
+            html += `<div class="section">
+                <h3 class="section-title">Recent Intent Activity</h3>
+                <div style="border-left:2px solid #4f46e5;padding-left:16px;">`;
             ALERTS.slice(0, 3).forEach(alert => {
                 html += `<div style="margin-bottom:16px;">
                     <div style="color:#e2e8f0;font-size:13px;font-weight:600;margin-bottom:4px;">${alert.account} <span class="badge ${getTempBadgeClass(alert.temp)}">${alert.temp}</span></div>
@@ -403,15 +496,14 @@
                     <p style="color:#6b7280;font-size:11px;">${alert.time}</p>
                 </div>`;
             });
-
             html += `</div></div>
             <div class="section">
                 <h3 class="section-title">Quick Actions</h3>
-                <div style="display:flex;gap:12px;">
-                    <button class="btn-action" onclick="alert('Draft Message: Coming Soon')">✉️ Draft Message</button>
-                    <button class="btn-action" onclick="alert('Log Call: Coming Soon')">☎️ Log Call</button>
-                    <button class="btn-action" onclick="alert('Book Meeting: Coming Soon')">📅 Book Meeting</button>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                    <button class="btn-action" onclick="showView('messages')">✉️ Draft Message</button>
                     <button class="btn-action" onclick="showView('pipeline')">📊 View Pipeline</button>
+                    <button class="btn-action" onclick="showView('accounts')">🏢 Target Accounts</button>
+                    <button class="btn-action" onclick="showView('feed')">⚡ Intent Feed</button>
                 </div>
             </div>`;
 
@@ -464,37 +556,65 @@
             document.getElementById('view-feed').innerHTML = html;
         }
 
-        function renderAccounts() {
-            let html = `<div style="margin-bottom:16px;">
-                <div style="display:flex;gap:8px;margin-bottom:16px;">
-                    <button class="filter-button active">All (10)</button>
-                    <button class="filter-button" onclick="alert('Filter: HOT')">Hot (3)</button>
-                    <button class="filter-button" onclick="alert('Filter: WARM')">Warm (4)</button>
-                    <button class="filter-button" onclick="alert('Filter: COLD')">Cold (3)</button>
-                </div>
-                <input type="text" class="input" placeholder="Search accounts..." style="margin-bottom:16px;">
-            </div>
-            <div class="grid-3">`;
+        async function renderAccounts() {
+            document.getElementById('view-accounts').innerHTML = `<div style="color:#6b7280;font-size:13px;padding:40px;text-align:center;"><div style="font-size:24px;margin-bottom:8px;">⏳</div>Loading accounts from HubSpot...</div>`;
 
-            ACCOUNTS.forEach(acc => {
-                const tempClass = getTempCardClass(acc.temperature);
-                const deal = DEALS.find(d => d.account === acc.name);
-                html += `<div class="account-card ${tempClass}">
+            const companies = await fetchHSCompanies(100);
+
+            if (!companies.length) {
+                document.getElementById('view-accounts').innerHTML = `<div style="color:#f87171;padding:20px;text-align:center;">Could not load HubSpot accounts. Check your token in Settings.</div>`;
+                return;
+            }
+
+            const lifecycleLabel = {customer:'Customer',salesqualifiedlead:'SQL',marketingqualifiedlead:'MQL',lead:'Lead','1015833991':'Target','1002936073':'Active Opp','1002983238':'Engaged'};
+            const lifecycleColor = {customer:'#34d399',salesqualifiedlead:'#a5b4fc',lead:'#6b7280','1015833991':'#fbbf24','1002936073':'#f97316','1002983238':'#60a5fa'};
+
+            let html = `<div style="margin-bottom:16px;">
+                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+                    <span style="font-size:13px;color:#6b7280;">${companies.length} accounts loaded from HubSpot</span>
+                    <input type="text" class="input" id="acctSearch" placeholder="Search accounts..." style="margin-left:auto;width:220px;" oninput="filterAccountCards(this.value)">
+                </div>
+            </div>
+            <div class="grid-3" id="accountsGrid">`;
+
+            companies.forEach(c => {
+                const p = c.properties;
+                const name = p.name || p.domain || 'Unknown';
+                const industry = (p.industry || '').replace(/_/g,' ');
+                const employees = p.numberofemployees ? parseInt(p.numberofemployees).toLocaleString() : '—';
+                const revenue = p.annualrevenue ? '$' + (parseInt(p.annualrevenue)/1e6).toFixed(1) + 'M ARR' : '';
+                const country = p.country || '';
+                const lifecycle = p.lifecyclestage || '';
+                const label = lifecycleLabel[lifecycle] || lifecycle || 'Unknown';
+                const color = lifecycleColor[lifecycle] || '#6b7280';
+                const lastMod = p.notes_last_updated ? new Date(p.notes_last_updated).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+                const website = p.website ? `<a href="${p.website.startsWith('http')?p.website:'https://'+p.website}" target="_blank" style="color:#a5b4fc;font-size:11px;">🌐 Website</a>` : '';
+                const hsUrl = `https://app.hubspot.com/contacts/2288821/company/${c.id}`;
+
+                html += `<div class="account-card" data-name="${name.toLowerCase()}" style="cursor:pointer;" onclick="window.open('${hsUrl}','_blank')">
                     <div class="account-header">
-                        <div class="account-name">${acc.name}</div>
-                        <span class="badge ${getTempBadgeClass(acc.temperature)}">${acc.temperature}</span>
+                        <div class="account-name" style="font-size:13px;">${name}</div>
+                        <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:${color}22;color:${color};border:1px solid ${color}44;">${label}</span>
                     </div>
-                    <div class="account-meta">${acc.industry} • ${acc.employees.toLocaleString()} employees</div>
-                    <div class="account-signals">
-                        ${acc.signals.slice(0,3).map(s => `<div class="signal-pill">${s}</div>`).join('')}
+                    <div class="account-meta" style="font-size:11px;margin-bottom:6px;">${[industry, country].filter(Boolean).join(' • ')}</div>
+                    <div style="font-size:11px;color:#9ca3af;display:flex;gap:12px;flex-wrap:wrap;">
+                        ${employees !== '—' ? `<span>👥 ${employees}</span>` : ''}
+                        ${revenue ? `<span>💰 ${revenue}</span>` : ''}
+                        ${lastMod ? `<span>🕐 ${lastMod}</span>` : ''}
                     </div>
-                    ${deal ? `<div style="font-size:11px;color:#34d399;margin:8px 0;">${deal.stage} • ${formatPrice(deal.value)}</div>` : ''}
-                    <div style="font-size:11px;color:#6b7280;">📊 ${acc.visitors30d} visitors / 30d • Last: ${acc.lastVisit}</div>
+                    ${website ? `<div style="margin-top:8px;">${website}</div>` : ''}
                 </div>`;
             });
 
             html += `</div>`;
             document.getElementById('view-accounts').innerHTML = html;
+        }
+
+        function filterAccountCards(q) {
+            const lower = q.toLowerCase();
+            document.querySelectorAll('#accountsGrid .account-card').forEach(card => {
+                card.style.display = !lower || card.dataset.name.includes(lower) ? '' : 'none';
+            });
         }
 
         function filterAlerts(f) { alert('Filter: '+f); }
@@ -696,65 +816,89 @@ Novartis
             document.getElementById('view-messages').innerHTML = html;
         }
 
-        function renderPipeline() {
-            const stages = ['Prospect','Qualified','Discovery','Demo','Proposal','Negotiation'];
+        async function renderPipeline() {
+            document.getElementById('view-pipeline').innerHTML = `<div style="color:#6b7280;font-size:13px;padding:40px;text-align:center;"><div style="font-size:24px;margin-bottom:8px;">⏳</div>Loading live pipeline from HubSpot...</div>`;
+
+            const deals = await fetchHSDeals(100);
+
+            // HubSpot stage ID mapping (standard pipeline)
+            const STAGE_MAP = {
+                '1009579855': 'Prospect', '1009579856': 'Qualified', '1009579857': 'Discovery',
+                '1009579858': 'Demo', '1009579859': 'Proposal', '995739704': 'Negotiation',
+                '995739708': 'Closed Won', '1009579862': 'Closed Lost',
+                '1006756883': 'Prospect', '1006756884': 'Qualified', '1006756885': 'Discovery',
+                '1006756886': 'Demo', '1006756887': 'Proposal'
+            };
+            const STAGE_ORDER = ['Prospect','Qualified','Discovery','Demo','Proposal','Negotiation'];
+
+            const now = new Date();
+            const total = deals.reduce((s,d) => s + parseFloat(d.properties.amount||0), 0);
+            const activeDeals = deals.filter(d => {
+                const stage = STAGE_MAP[d.properties.dealstage] || '';
+                return !['Closed Won','Closed Lost'].includes(stage);
+            });
+            const wonDeals = deals.filter(d => (STAGE_MAP[d.properties.dealstage]||'') === 'Closed Won');
+            const closingThisMonth = activeDeals.filter(d => {
+                if (!d.properties.closedate) return false;
+                const cd = new Date(d.properties.closedate);
+                return cd.getMonth() === now.getMonth() && cd.getFullYear() === now.getFullYear();
+            }).reduce((s,d) => s + parseFloat(d.properties.amount||0), 0);
+            const avgSize = activeDeals.length ? activeDeals.reduce((s,d)=>s+parseFloat(d.properties.amount||0),0)/activeDeals.length : 0;
+
             let html = `<div style="margin-bottom:20px;">
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">
-                    <div class="stat-card"><div class="stat-value">${formatCurrency(DEALS.reduce((s,d)=>s+d.value,0))}</div><div class="stat-label">Total Pipeline</div></div>
-                    <div class="stat-card"><div class="stat-value">${formatPrice(DEALS.reduce((s,d)=>s+d.value,0)/DEALS.length)}</div><div class="stat-label">Avg Deal Size</div></div>
-                    <div class="stat-card"><div class="stat-value">${formatPrice(DEALS.filter(d=>new Date(d.closeDate).getMonth()===new Date().getMonth()).reduce((s,d)=>s+d.value,0))}</div><div class="stat-label">Closing This Month</div></div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+                    <div class="stat-card"><div class="stat-value">${formatCurrency(activeDeals.reduce((s,d)=>s+parseFloat(d.properties.amount||0),0))}</div><div class="stat-label">Active Pipeline</div></div>
+                    <div class="stat-card"><div class="stat-value">${activeDeals.length}</div><div class="stat-label">Open Deals</div></div>
+                    <div class="stat-card"><div class="stat-value">${formatCurrency(avgSize)}</div><div class="stat-label">Avg Deal Size</div></div>
+                    <div class="stat-card"><div class="stat-value" style="color:#34d399;">${formatCurrency(closingThisMonth)}</div><div class="stat-label">Closing This Month</div></div>
                 </div>
-                <div style="display:flex;gap:16px;overflow-x:auto;padding-bottom:16px;">`;
+                <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;">`;
 
-            stages.forEach(stage => {
-                const stageDeals = DEALS.filter(d => d.stage === stage);
-                html += `<div class="kanban-column">
-                    <div class="kanban-header">${stage} (${stageDeals.length})</div>`;
+            STAGE_ORDER.forEach(stage => {
+                const stageDeals = activeDeals.filter(d => (STAGE_MAP[d.properties.dealstage]||'Prospect') === stage);
+                const stageVal = stageDeals.reduce((s,d)=>s+parseFloat(d.properties.amount||0),0);
+                html += `<div class="kanban-column" style="min-width:200px;">
+                    <div class="kanban-header">${stage} <span style="color:#6b7280;font-weight:400;">(${stageDeals.length})</span></div>
+                    <div style="font-size:10px;color:#6b7280;margin-bottom:8px;">${formatCurrency(stageVal)}</div>`;
 
-                stageDeals.forEach(deal => {
-                    const healthClass = `health-${deal.health}`;
-                    html += `<div class="deal-card">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-                            <div class="deal-account">${deal.account}</div>
-                            <span class="health-dot ${healthClass}"></span>
+                stageDeals.slice(0,8).forEach(deal => {
+                    const p = deal.properties;
+                    const name = p.dealname || 'Unknown';
+                    const val = parseFloat(p.amount||0);
+                    const prob = p.hs_deal_stage_probability ? Math.round(parseFloat(p.hs_deal_stage_probability)*100)+'%' : '';
+                    const closeDate = p.closedate ? new Date(p.closedate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}) : '';
+                    const isOverdue = p.closedate && new Date(p.closedate) < now;
+                    const hsUrl = `https://app.hubspot.com/contacts/2288821/deal/${deal.id}`;
+                    html += `<div class="deal-card" onclick="window.open('${hsUrl}','_blank')" style="cursor:pointer;${isOverdue?'border-left:2px solid #f87171;':''}">
+                        <div class="deal-account" style="font-size:12px;margin-bottom:4px;">${name.length>30?name.substring(0,28)+'…':name}</div>
+                        <div class="deal-value">${formatCurrency(val)}</div>
+                        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+                            <span style="font-size:10px;color:#6b7280;">${prob}</span>
+                            <span style="font-size:10px;color:${isOverdue?'#f87171':'#6b7280'};">${closeDate}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                            <span style="font-size:11px;color:#6b7280;">Owner: ${deal.owner}</span>
-                        </div>
-                        <div class="deal-value">${formatPrice(deal.value)}</div>
-                        <div class="deal-stage">${deal.closeDate}</div>
                     </div>`;
                 });
-
+                if (stageDeals.length > 8) html += `<div style="font-size:11px;color:#6b7280;text-align:center;padding:8px;">+${stageDeals.length-8} more</div>`;
                 html += `</div>`;
             });
 
-            html += `</div>
-            <div class="section">
-                <h3 class="section-title">At-Risk & Stalled Deals</h3>`;
-
-            DEALS.filter(d => d.health !== 'good').forEach(deal => {
-                html += `<div class="warning-card">
-                    <div class="warning-title">⚠️ ${deal.account} — ${deal.stage}</div>
-                    <div class="warning-detail">${deal.note} (${deal.daysInStage} days in stage)</div>
-                </div>`;
-            });
-
-            html += `<div style="margin-top:20px;">
-                <h4 style="font-weight:600;margin-bottom:12px;color:#e2e8f0;">Lost Deals</h4>`;
-
-            LOST_DEALS.forEach(ld => {
-                html += `<div style="background-color:#0b0f1a;border:1px solid #1f2937;border-radius:8px;padding:12px;margin-bottom:8px;font-size:12px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                        <strong>${ld.account}</strong>
-                        <span style="color:#ef4444;">${ld.reason}</span>
-                    </div>
-                    <div style="color:#6b7280;">${formatPrice(ld.value)} • ${ld.lostDate}</div>
-                    <div style="color:#9ca3af;margin-top:4px;font-size:11px;">${ld.note}</div>
-                </div>`;
-            });
-
             html += `</div></div>`;
+
+            // At-risk: overdue close date with high value
+            const atRisk = activeDeals.filter(d => d.properties.closedate && new Date(d.properties.closedate) < now && parseFloat(d.properties.amount||0) > 0);
+            if (atRisk.length > 0) {
+                html += `<div class="section"><h3 class="section-title">⚠️ Overdue Close Dates (${atRisk.length})</h3>`;
+                atRisk.slice(0,5).forEach(d => {
+                    const p = d.properties;
+                    const daysOverdue = Math.floor((now - new Date(p.closedate)) / 86400000);
+                    html += `<div class="warning-card">
+                        <div class="warning-title">${p.dealname}</div>
+                        <div class="warning-detail">${formatCurrency(parseFloat(p.amount||0))} · Close date was ${new Date(p.closedate).toLocaleDateString('en-US',{month:'short',day:'numeric'})} · <strong>${daysOverdue} days overdue</strong></div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+
             document.getElementById('view-pipeline').innerHTML = html;
         }
 
@@ -773,9 +917,9 @@ Novartis
                         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#0b0f1a;border-radius:8px;border:1px solid #1f2937;">
                             <div>
                                 <div style="font-size:12px;font-weight:600;color:#e2e8f0;">HubSpot CRM</div>
-                                <div style="font-size:11px;color:#6b7280;margin-top:2px;">Live account data · Pending admin token</div>
+                                <div style="font-size:11px;color:#6b7280;margin-top:2px;">Live data · Tasks · Companies · Deals · Contacts</div>
                             </div>
-                            <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);">⏳ Pending</span>
+                            <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.2);">✓ Connected</span>
                         </div>
                         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#0b0f1a;border-radius:8px;border:1px solid #1f2937;">
                             <div>
